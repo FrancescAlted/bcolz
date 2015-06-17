@@ -304,6 +304,7 @@ cdef class chunk:
 
         self.atom = atom
         self.atomsize = atom.itemsize
+        self.nthreads = cparams.nthreads
         dtype_ = atom.base
         self.typekind = dtype_.kind
         # Hack for allowing strings with len > BLOSC_MAX_TYPESIZE
@@ -400,21 +401,19 @@ cdef class chunk:
                        object cparams):
         """Compress data with `cparams` and return metadata."""
         cdef size_t nbytes_, cbytes, blocksize
-        cdef int clevel, shuffle, nthreads, ret
+        cdef int clevel, shuffle, ret
         cdef char *dest, *cname_c
 
         clevel = cparams.clevel
         shuffle = cparams.shuffle
         cname = cparams.cname
-        nthreads = cparams.nthreads
         if type(cname) != bytes:
             cname = cname.encode()
         dest = <char *> malloc(nbytes + BLOSC_MAX_OVERHEAD)
         cname_c = cname
-        with nogil:
-            ret = blosc_compress_ctx(
-                clevel, shuffle, itemsize, nbytes,
-                data, dest, nbytes + BLOSC_MAX_OVERHEAD, cname_c, 0, nthreads)
+        ret = blosc_compress_ctx(
+            clevel, shuffle, itemsize, nbytes,
+            data, dest, nbytes + BLOSC_MAX_OVERHEAD, cname_c, 0, self.nthreads)
         if ret <= 0:
             raise RuntimeError(
                 "fatal error during Blosc compression: %d" % ret)
@@ -445,8 +444,7 @@ cdef class chunk:
         result_str = PyBytes_FromStringAndSize(NULL, self.nbytes)
         dest = PyBytes_AS_STRING(result_str);
 
-        with nogil:
-            ret = blosc_decompress_ctx(self.data, dest, self.nbytes, 2)
+        ret = blosc_decompress_ctx(self.data, dest, self.nbytes, self.nthreads)
         if ret < 0:
             raise RuntimeError(
                 "fatal error during Blosc decompression: %d" % ret)

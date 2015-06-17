@@ -4,7 +4,7 @@ cdef class chunk:
     cdef char typekind, isconstant
     cdef public int atomsize, itemsize, blocksize
     cdef public int nbytes, cbytes, cdbytes
-    cdef int true_count
+    cdef int true_count, nthreads
     cdef char *data
     cdef object atom, constant, dobject
 
@@ -25,6 +25,7 @@ cdef class chunks(object):
     cdef read_chunk(self, nchunk)
     cdef _save(self, nchunk, chunk_)
     cdef _chunk_file_name(self, nchunk)
+
 
 cdef class carray:
     cdef public int itemsize, atomsize
