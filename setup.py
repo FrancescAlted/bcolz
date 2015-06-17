@@ -163,7 +163,8 @@ for arg in args:
 if not BLOSC_DIR:
     # Compiling everything from sources
     # Blosc + BloscLZ sources
-    sources += glob.glob('c-blosc/blosc/*.c')
+    # TODO: see a way to detect if AVX2 is supported in this platform
+    sources += [f for f in glob.glob('c-blosc/blosc/*.c') if 'avx2' not in f]
     # LZ4 sources
     sources += glob.glob('c-blosc/internal-complibs/lz4*/*.c')
     # Snappy sources
