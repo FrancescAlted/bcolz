@@ -6,7 +6,7 @@
 #
 # python bench/concat.py style
 #
-# where `style` can be any of 'numpy', 'concat' or 'bcolsz'
+# where `style` can be any of 'numpy', 'concat' or 'bcolz'
 #
 # You can modify other parameters from the command line if you want:
 #
@@ -38,7 +38,8 @@ def concat(data):
 
 
 def append(data, clevel):
-    alldata = bcolz.carray(data[0], cparams=bcolz.cparams(clevel))
+    alldata = bcolz.carray(data[0], cparams=bcolz.cparams(
+        clevel, cname="blosclz", nthreads=2))
     for carr in data[1:]:
         alldata.append(carr)
 

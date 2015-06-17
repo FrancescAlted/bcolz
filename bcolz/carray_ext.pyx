@@ -108,7 +108,14 @@ cdef extern from "blosc.h":
     int blosc_compress(int clevel, int doshuffle, size_t typesize,
                        size_t nbytes, void *src, void *dest,
                        size_t destsize) nogil
+    int blosc_compress_ctx(
+        int clevel, int doshuffle, size_t typesize,
+        size_t nbytes, void *src, void *dest,
+        size_t destsize, char* compressor, size_t blocksize,
+        int numinternalthreads) nogil
     int blosc_decompress(void *src, void *dest, size_t destsize) nogil
+    int blosc_decompress_ctx(void *src, void *dest, size_t destsize,
+                             int numinternalthreads) nogil
     int blosc_getitem(void *src, int start, int nitems, void *dest) nogil
     void blosc_free_resources()
     void blosc_cbuffer_sizes(void *cbuffer, size_t *nbytes,
@@ -151,24 +158,6 @@ def blosc_compressor_list():
         list_compr = list_compr.decode()
     clist = list_compr.split(',')
     return clist
-
-def _blosc_set_nthreads(nthreads):
-    """
-    _blosc_set_nthreads(nthreads)
-
-    Sets the number of threads that Blosc can use.
-
-    Parameters
-    ----------
-    nthreads : int
-        The desired number of threads to use.
-
-    Returns
-    -------
-    out : int
-        The previous setting for the number of threads.
-    """
-    return blosc_set_nthreads(nthreads)
 
 def _blosc_init():
     """
@@ -411,20 +400,21 @@ cdef class chunk:
                        object cparams):
         """Compress data with `cparams` and return metadata."""
         cdef size_t nbytes_, cbytes, blocksize
-        cdef int clevel, shuffle, ret
-        cdef char *dest
+        cdef int clevel, shuffle, nthreads, ret
+        cdef char *dest, *cname_c
 
         clevel = cparams.clevel
         shuffle = cparams.shuffle
         cname = cparams.cname
+        nthreads = cparams.nthreads
         if type(cname) != bytes:
             cname = cname.encode()
-        if blosc_set_compressor(cname) < 0:
-            raise ValueError(
-                "Compressor '%s' is not available in this build" % cname)
         dest = <char *> malloc(nbytes + BLOSC_MAX_OVERHEAD)
-        ret = blosc_compress(clevel, shuffle, itemsize, nbytes,
-                             data, dest, nbytes + BLOSC_MAX_OVERHEAD)
+        cname_c = cname
+        with nogil:
+            ret = blosc_compress_ctx(
+                clevel, shuffle, itemsize, nbytes,
+                data, dest, nbytes + BLOSC_MAX_OVERHEAD, cname_c, 0, nthreads)
         if ret <= 0:
             raise RuntimeError(
                 "fatal error during Blosc compression: %d" % ret)
@@ -455,7 +445,8 @@ cdef class chunk:
         result_str = PyBytes_FromStringAndSize(NULL, self.nbytes)
         dest = PyBytes_AS_STRING(result_str);
 
-        ret = blosc_decompress(self.data, dest, self.nbytes)
+        with nogil:
+            ret = blosc_decompress_ctx(self.data, dest, self.nbytes, 2)
         if ret < 0:
             raise RuntimeError(
                 "fatal error during Blosc decompression: %d" % ret)

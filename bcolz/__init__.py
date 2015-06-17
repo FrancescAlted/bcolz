@@ -54,7 +54,6 @@ from bcolz.arrayprint import (
 
 from bcolz.carray_ext import (
     carray, blosc_version, blosc_compressor_list,
-    _blosc_set_nthreads as blosc_set_nthreads,
     _blosc_init, _blosc_destroy)
 from bcolz.ctable import ctable
 from bcolz.toplevel import (
@@ -72,7 +71,7 @@ except ImportError:
               "If on Python2.6 please install unittest2")
 
 
-def _get_git_descrtiption(path_):
+def _get_git_description(path_):
     """ Get the output of git-describe when executed in a given path. """
 
     # imports in function because:
@@ -99,15 +98,13 @@ def _get_git_descrtiption(path_):
     except subprocess.CalledProcessError:  # not in git repo
         pass
 
-git_description = _get_git_descrtiption(__path__[0])
+git_description = _get_git_description(__path__[0])
 
 # Initialization code for the Blosc and numexpr libraries
 _blosc_init()
-ncores = detect_number_of_cores()
-blosc_set_nthreads(ncores)
 # Benchmarks show that using several threads can be an advantage in bcolz
-blosc_set_nthreads(ncores)
+ncores = detect_number_of_cores()
 if numexpr_here:
-    numexpr.set_num_threads(ncores)
+    numexpr.set_num_threads(ncores // 2)
 import atexit
 atexit.register(_blosc_destroy)

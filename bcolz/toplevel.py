@@ -78,7 +78,7 @@ def set_nthreads(nthreads):
     Sets the number of threads to be used during carray operation.
 
     This affects to both Blosc and Numexpr (if available).  If you want to
-    change this number only for Blosc, use `blosc_set_nthreads` instead.
+    change this number only for Blosc, use `cparams` instead.
 
     Parameters
     ----------
@@ -92,10 +92,11 @@ def set_nthreads(nthreads):
 
     See Also
     --------
-    blosc_set_nthreads
+    cparams
 
     """
-    nthreads_old = bcolz.blosc_set_nthreads(nthreads)
+    nthreads_old = bcolz.defaults.defaults['nthreads']
+    bcolz.defaults.defaults['nthreads'] = nthreads
     if bcolz.numexpr_here:
         bcolz.numexpr.set_num_threads(nthreads)
     return nthreads_old
@@ -546,7 +547,7 @@ def walk(dir, classname=None, mode='a'):
 
 class cparams(object):
     """
-    cparams(clevel=None, shuffle=None, cname=None)
+    cparams(clevel=None, shuffle=None, cname=None, nthreads=None)
 
     Class to host parameters for compression and other filters.
 
@@ -558,6 +559,8 @@ class cparams(object):
         Whether the shuffle filter is active or not.
     cname : string ('blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib')
         Select the compressor to use inside Blosc.
+    nthreads : int
+        Select the number of threads to use for compress/decompress.
 
     In case some of the parameters are not passed, they will be
     set to a default (see `setdefaults()` method).
@@ -583,8 +586,13 @@ class cparams(object):
         """The compressor name."""
         return self._cname
 
+    @property
+    def nthreads(self):
+        """The number of threads for compress/decompress."""
+        return self._nthreads
+
     @staticmethod
-    def _checkparams(clevel, shuffle, cname):
+    def _checkparams(clevel, shuffle, cname, nthreads):
         if clevel is not None:
             if not isinstance(clevel, int):
                 raise ValueError("`clevel` must be an int.")
@@ -600,11 +608,18 @@ class cparams(object):
             if cname not in list_cnames:
                 raise ValueError(
                     "Compressor '%s' is not available in this build" % cname)
-        return clevel, shuffle, cname
+        if cname is not None:
+            if nthreads < 1:
+                raise ValueError(
+                    "Number of threads (%s) cannot be less than 1" % nthreads)
+            if nthreads > 8:
+                warnings.warn(
+                    "The number of threads (%d) is too high?" % nthreads)
+        return clevel, shuffle, cname, nthreads
 
     @staticmethod
-    def setdefaults(clevel=None, shuffle=None, cname=None):
-        """Change the defaults for `clevel`, `shuffle` and `cname` params.
+    def setdefaults(clevel=None, shuffle=None, cname=None, nthreads=None):
+        """Change the defaults for compression params.
 
         Parameters
         ----------
@@ -614,12 +629,15 @@ class cparams(object):
             Whether the shuffle filter is active or not.
         cname : string ('blosclz', 'lz4', 'lz4hc', 'snappy', 'zlib')
             Select the compressor to use inside Blosc.
+        nthreads : int
+            Select the number of threads to use for compress/decompress.
 
         If this method is not called, the defaults will be set as in
-        defaults.py (``{clevel=5, shuffle=True, cname='blosclz'}``).
-
+        defaults.py (``{clevel=5, shuffle=True, cname='blosclz',
+        nthreads=ncores/2}``).
         """
-        clevel, shuffle, cname = cparams._checkparams(clevel, shuffle, cname)
+        clevel, shuffle, cname, nthreads = cparams._checkparams(
+            clevel, shuffle, cname, nthreads)
         dflts = bcolz.defaults.cparams
         if clevel is not None:
             dflts['clevel'] = clevel
@@ -627,18 +645,23 @@ class cparams(object):
             dflts['shuffle'] = shuffle
         if cname is not None:
             dflts['cname'] = cname
+        if nthreads is not None:
+            dflts['nthreads'] = nthreads
 
-    def __init__(self, clevel=None, shuffle=None, cname=None):
-        clevel, shuffle, cname = cparams._checkparams(clevel, shuffle, cname)
+    def __init__(self, clevel=None, shuffle=None, cname=None, nthreads=None):
+        clevel, shuffle, cname, nthreads = cparams._checkparams(
+            clevel, shuffle, cname, nthreads)
         dflts = bcolz.defaults.cparams
         self._clevel = dflts['clevel'] if clevel is None else clevel
         self._shuffle = dflts['shuffle'] if shuffle is None else shuffle
         self._cname = dflts['cname'] if cname is None else cname
+        self._nthreads = dflts['nthreads'] if nthreads is None else nthreads
 
     def __repr__(self):
         args = ["clevel=%d" % self._clevel,
                 "shuffle=%s" % self._shuffle,
                 "cname='%s'" % self._cname,
+                "nthreads=%s" % self._nthreads,
                 ]
         return '%s(%s)' % (self.__class__.__name__, ', '.join(args))
 
